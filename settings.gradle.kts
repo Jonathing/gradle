@@ -508,9 +508,8 @@ sealed class ArchitectureElementBuilder(
 
 class ArchitectureModuleBuilder(
     name: String,
-    private val projectScope: ProjectScope
+    private val projectScope: ProjectScope = ProjectScope("platforms/$name"),
 ) : ArchitectureElementBuilder(name) {
-    constructor(name: String) : this(name, ProjectScope("platforms/$name"))
 
     fun subproject(projectName: String) {
         projectScope.subproject(projectName)
@@ -523,12 +522,10 @@ class ArchitectureModuleBuilder(
 
 class PlatformBuilder(
     name: String,
-    private val projectScope: ProjectScope
+    private val projectScope: ProjectScope = ProjectScope("platforms/$name"),
 ) : ArchitectureElementBuilder(name) {
     private val modules = mutableListOf<ArchitectureModuleBuilder>()
     private val uses = mutableListOf<PlatformBuilder>()
-
-    constructor(name: String) : this(name, ProjectScope("platforms/$name"))
 
     fun subproject(projectName: String) {
         projectScope.subproject(projectName)
