@@ -57,6 +57,9 @@ public abstract class DefaultJvmSoftwareComponent extends DefaultAdhocSoftwareCo
 
     @Override
     public void withJavadocJar() {
+        // TODO: This should probably apply to all features and not just the main feature or this
+        // should be configurable at the feature level instead of the project level.
+        // The original implementation only applied to the main feature.
         getFeatures().configureEach(feature -> {
             if (feature.getName().equals(JvmConstants.JAVA_MAIN_FEATURE_NAME)) {
                 feature.withJavadocJar();
@@ -71,6 +74,9 @@ public abstract class DefaultJvmSoftwareComponent extends DefaultAdhocSoftwareCo
 
     @Override
     public void withSourcesJar() {
+        // TODO: This should probably apply to all features and not just the main feature or this
+        // should be configurable at the feature level instead of the project level.
+        // The original implementation only applied to the main feature.
         getFeatures().configureEach(feature -> {
             if (feature.getName().equals(JvmConstants.JAVA_MAIN_FEATURE_NAME)) {
                 feature.withSourcesJar();
