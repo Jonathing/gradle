@@ -37,6 +37,7 @@ import org.gradle.internal.service.scopes.ServiceScope;
 import org.gradle.jvm.toolchain.JavaToolchainSpec;
 import org.gradle.jvm.toolchain.internal.install.JavaToolchainProvisioningService;
 import org.gradle.jvm.toolchain.internal.install.JvmInstallationMetadataMatcher;
+import org.jspecify.annotations.Nullable;
 
 import javax.inject.Inject;
 import java.io.File;
@@ -142,6 +143,15 @@ public class JavaToolchainQueryService {
         return new DefaultProvider<>(() -> resolveToolchain(filterInternal, requiredCapabilities));
     }
 
+    public ProviderInternal<JavaToolchain> findMatchingToolchainOptional(JavaToolchainSpec filter) {
+        return findMatchingToolchain(filter, Collections.emptySet());
+    }
+
+    public ProviderInternal<JavaToolchain> findMatchingToolchainOptional(JavaToolchainSpec filter, Set<JavaInstallationCapability> requiredCapabilities) {
+        JavaToolchainSpecInternal filterInternal = (JavaToolchainSpecInternal) Objects.requireNonNull(filter);
+        return new DefaultProvider<>(() -> tryResolveToolchain(filterInternal, requiredCapabilities));
+    }
+
     private JavaToolchain resolveToolchain(JavaToolchainSpecInternal requestedSpec, Set<JavaInstallationCapability> requiredCapabilities) throws Exception {
         requestedSpec.finalizeProperties();
 
@@ -173,6 +183,14 @@ public class JavaToolchainQueryService {
             throw (Exception) resolutionResult;
         } else {
             return (JavaToolchain) resolutionResult;
+        }
+    }
+
+    private @Nullable JavaToolchain tryResolveToolchain(JavaToolchainSpecInternal requestedSpec, Set<JavaInstallationCapability> requiredCapabilities) {
+        try {
+            return resolveToolchain(requestedSpec, requiredCapabilities);
+        } catch (Exception e) {
+            return null;
         }
     }
 

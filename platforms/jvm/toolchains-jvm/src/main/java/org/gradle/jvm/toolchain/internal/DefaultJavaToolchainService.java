@@ -67,6 +67,18 @@ public class DefaultJavaToolchainService implements JavaToolchainService {
     }
 
     @Override
+    public Provider<JavaCompiler> compilerForOptional(Action<? super JavaToolchainSpec> config) {
+        return compilerForOptional(configureToolchainSpec(config));
+    }
+
+    @Override
+    public Provider<JavaCompiler> compilerForOptional(JavaToolchainSpec spec) {
+        return queryService.findMatchingToolchainOptional(spec, Sets.immutableEnumSet(JavaInstallationCapability.JAVA_COMPILER))
+            .withSideEffect(toolchain -> emitEvent(toolchain, JavaTool.COMPILER))
+            .map(javaToolchain -> new DefaultToolchainJavaCompiler(javaToolchain, compilerFactory));
+    }
+
+    @Override
     public Provider<JavaLauncher> launcherFor(Action<? super JavaToolchainSpec> config) {
         return launcherFor(configureToolchainSpec(config));
     }
@@ -79,6 +91,18 @@ public class DefaultJavaToolchainService implements JavaToolchainService {
     }
 
     @Override
+    public Provider<JavaLauncher> launcherForOptional(Action<? super JavaToolchainSpec> config) {
+        return launcherFor(configureToolchainSpec(config));
+    }
+
+    @Override
+    public Provider<JavaLauncher> launcherForOptional(JavaToolchainSpec spec) {
+        return queryService.findMatchingToolchainOptional(spec)
+            .withSideEffect(toolchain -> emitEvent(toolchain, JavaTool.LAUNCHER))
+            .map(DefaultToolchainJavaLauncher::new);
+    }
+
+    @Override
     public Provider<JavadocTool> javadocToolFor(Action<? super JavaToolchainSpec> config) {
         return javadocToolFor(configureToolchainSpec(config));
     }
@@ -86,6 +110,18 @@ public class DefaultJavaToolchainService implements JavaToolchainService {
     @Override
     public Provider<JavadocTool> javadocToolFor(JavaToolchainSpec spec) {
         return queryService.findMatchingToolchain(spec, Sets.immutableEnumSet(JavaInstallationCapability.JAVADOC_TOOL))
+            .withSideEffect(toolchain -> emitEvent(toolchain, JavaTool.JAVADOC))
+            .map(javaToolchain -> toolFactory.create(JavadocTool.class, javaToolchain));
+    }
+
+    @Override
+    public Provider<JavadocTool> javadocToolForOptional(Action<? super JavaToolchainSpec> config) {
+        return javadocToolFor(configureToolchainSpec(config));
+    }
+
+    @Override
+    public Provider<JavadocTool> javadocToolForOptional(JavaToolchainSpec spec) {
+        return queryService.findMatchingToolchainOptional(spec, Sets.immutableEnumSet(JavaInstallationCapability.JAVADOC_TOOL))
             .withSideEffect(toolchain -> emitEvent(toolchain, JavaTool.JAVADOC))
             .map(javaToolchain -> toolFactory.create(JavadocTool.class, javaToolchain));
     }
