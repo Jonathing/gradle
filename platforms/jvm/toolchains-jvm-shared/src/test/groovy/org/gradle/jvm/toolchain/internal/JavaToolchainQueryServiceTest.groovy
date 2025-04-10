@@ -201,6 +201,28 @@ class JavaToolchainQueryServiceTest extends Specification {
         ]
     }
 
+    def "returns empty provider for optional method when no jdk is present and requested capabilities = #capabilities"() {
+        given:
+        def queryService = setupInstallations(["8.0.jre", "8.0.242.jre", "7.9.jre", "7.7.jre", "14.0.2+12.jre", "21.0.6-native"])
+
+        when:
+        def filter = createSpec()
+        filter.languageVersion.set(JavaLanguageVersion.of(8))
+
+        def toolchain = queryService.findMatchingToolchainOptional(filter, capabilities)
+
+        then:
+        !toolchain.isPresent()
+
+        where:
+        capabilities << [
+            EnumSet.of(JAVA_COMPILER),
+            EnumSet.of(JAVADOC_TOOL),
+            JDK_CAPABILITIES,
+            EnumSet.of(NATIVE_IMAGE)
+        ]
+    }
+
     def "ignores invalid toolchains when finding a matching one"() {
         given:
         def queryService = setupInstallations(["8.0", "8.0.242.hs-adpt", "8.0.broken"])
@@ -230,6 +252,22 @@ class JavaToolchainQueryServiceTest extends Specification {
         e.message == "Cannot find a Java installation on your machine (${OperatingSystem.current()}) matching: {languageVersion=12, vendor=any vendor, implementation=vendor-specific, nativeImageCapable=false}. " +
             "Toolchain auto-provisioning is not enabled."
     }
+
+    def "returns empty provider for optional method if no toolchain matches"() {
+        given:
+        def queryService = setupInstallations(["8", "9", "10"])
+
+        when:
+        def filter = createSpec()
+        filter.languageVersion.set(JavaLanguageVersion.of(12))
+        def toolchain = queryService.findMatchingToolchainOptional(filter)
+        value = toolchain.get()
+
+        then:
+        thrown(IllegalStateException)
+        toolchain.orNull === null
+    }
+
 
     def "returns current JVM toolchain if requested"() {
         given:
