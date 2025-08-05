@@ -35,7 +35,9 @@ import org.gradle.api.artifacts.result.ArtifactResult;
 import org.gradle.api.artifacts.result.ComponentArtifactsResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.artifacts.result.UnresolvedDependencyResult;
+import org.gradle.api.attributes.DocsType;
 import org.gradle.api.component.Artifact;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.specs.Specs;
 import org.gradle.internal.jvm.JavaModuleDetector;
@@ -52,6 +54,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFactoryInternal.ClassPathNotation.GRADLE_API;
 import static org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFactoryInternal.ClassPathNotation.GRADLE_TEST_KIT;
@@ -62,6 +65,7 @@ import static org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFacto
  * Allows adding and subtracting {@link Configuration}s, working in offline mode and downloading sources/javadoc.
  */
 public class IdeDependencySet {
+    private final ObjectFactory objectFactory;
     private final DependencyHandler dependencyHandler;
     private final JavaModuleDetector javaModuleDetector;
     private final Collection<Configuration> plusConfigurations;
@@ -70,11 +74,12 @@ public class IdeDependencySet {
     private final GradleApiSourcesResolver gradleApiSourcesResolver;
     private final Collection<Configuration> testConfigurations;
 
-    public IdeDependencySet(DependencyHandler dependencyHandler, JavaModuleDetector javaModuleDetector, Collection<Configuration> plusConfigurations, Collection<Configuration> minusConfigurations, boolean inferModulePath, GradleApiSourcesResolver gradleApiSourcesResolver) {
-        this(dependencyHandler, javaModuleDetector, plusConfigurations, minusConfigurations, inferModulePath, gradleApiSourcesResolver, Collections.emptySet());
+    public IdeDependencySet(ObjectFactory objectFactory, DependencyHandler dependencyHandler, JavaModuleDetector javaModuleDetector, Collection<Configuration> plusConfigurations, Collection<Configuration> minusConfigurations, boolean inferModulePath, GradleApiSourcesResolver gradleApiSourcesResolver) {
+        this(objectFactory, dependencyHandler, javaModuleDetector, plusConfigurations, minusConfigurations, inferModulePath, gradleApiSourcesResolver, Collections.emptySet());
     }
 
-    public IdeDependencySet(DependencyHandler dependencyHandler, JavaModuleDetector javaModuleDetector, Collection<Configuration> plusConfigurations, Collection<Configuration> minusConfigurations, boolean inferModulePath, GradleApiSourcesResolver gradleApiSourcesResolver, Collection<Configuration> testConfigurations) {
+    public IdeDependencySet(ObjectFactory objectFactory, DependencyHandler dependencyHandler, JavaModuleDetector javaModuleDetector, Collection<Configuration> plusConfigurations, Collection<Configuration> minusConfigurations, boolean inferModulePath, GradleApiSourcesResolver gradleApiSourcesResolver, Collection<Configuration> testConfigurations) {
+        this.objectFactory = objectFactory;
         this.dependencyHandler = dependencyHandler;
         this.javaModuleDetector = javaModuleDetector;
         this.plusConfigurations = plusConfigurations;
@@ -102,6 +107,7 @@ public class IdeDependencySet {
     private class IdeDependencyResult {
         private final Map<ComponentArtifactIdentifier, ResolvedArtifactResult> resolvedArtifacts = new LinkedHashMap<>();
         private final SetMultimap<ComponentArtifactIdentifier, Configuration> configurations = MultimapBuilder.hashKeys().linkedHashSetValues().build();
+        private final SetMultimap<ComponentIdentifier, Configuration> configurationsById = MultimapBuilder.hashKeys().linkedHashSetValues().build();
         private final Map<ComponentSelector, UnresolvedDependencyResult> unresolvedDependencies = new LinkedHashMap<>();
         private final Table<ModuleComponentIdentifier, Class<? extends Artifact>, Set<ResolvedArtifactResult>> auxiliaryArtifacts = HashBasedTable.create();
 
@@ -117,8 +123,10 @@ public class IdeDependencySet {
             for (Configuration configuration : plusConfigurations) {
                 ArtifactCollection artifacts = getResolvedArtifacts(configuration, visitor);
                 for (ResolvedArtifactResult resolvedArtifact : artifacts) {
-                    resolvedArtifacts.put(resolvedArtifact.getId(), resolvedArtifact);
-                    configurations.put(resolvedArtifact.getId(), configuration);
+                    ComponentArtifactIdentifier identifier = resolvedArtifact.getId();
+                    resolvedArtifacts.put(identifier, resolvedArtifact);
+                    configurations.put(identifier, configuration);
+                    configurationsById.put(identifier.getComponentIdentifier(), configuration);
                 }
                 if (artifacts.getFailures().isEmpty()) {
                     continue;
@@ -171,7 +179,7 @@ public class IdeDependencySet {
                 return;
             }
 
-            Set<ModuleComponentIdentifier> componentIdentifiers = getModuleComponentIdentifiers();
+            Set<ComponentArtifactIdentifier> componentIdentifiers = getModuleComponentArtifactIdentifiers();
             if (componentIdentifiers.isEmpty()) {
                 return;
             }
@@ -181,21 +189,30 @@ public class IdeDependencySet {
                 return;
             }
 
-            ArtifactResolutionResult result = dependencyHandler.createArtifactResolutionQuery()
-                .forComponents(componentIdentifiers)
-                .withArtifacts(JvmLibrary.class, types)
-                .execute();
+            SetMultimap<Configuration, ComponentIdentifier> cfgs = MultimapBuilder.hashKeys().linkedHashSetValues().build();
+            for (ComponentArtifactIdentifier id : componentIdentifiers) {
+                for (Configuration cfg : configurations.get(id)) {
+                    cfgs.put(cfg, id.getComponentIdentifier());
+                }
+            }
 
-            for (ComponentArtifactsResult artifactsResult : result.getResolvedComponents()) {
-                for (Class<? extends Artifact> type : types) {
-                    Set<ResolvedArtifactResult> resolvedArtifactResults = new LinkedHashSet<>();
+            for (Class<? extends Artifact> type : types) {
+                for (Map.Entry<Configuration, Collection<ComponentIdentifier>> entry : cfgs.asMap().entrySet()) {
+                    ArtifactCollection artifacts = entry.getKey().getIncoming().artifactView(viewConfiguration -> {
+                        viewConfiguration.withVariantReselection();
+                        viewConfiguration.lenient(true);
+                        Spec<ComponentIdentifier> filter = getComponentFilter(visitor);
+                        viewConfiguration.componentFilter(id -> entry.getValue().contains(id) && filter.isSatisfiedBy(id));
+                        if (SourcesArtifact.class.isAssignableFrom(type))
+                            viewConfiguration.getAttributes().attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objectFactory.named(DocsType.class, DocsType.SOURCES));
+                        else if (JavadocArtifact.class.isAssignableFrom(type))
+                            viewConfiguration.getAttributes().attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objectFactory.named(DocsType.class, DocsType.JAVADOC));
+                    }).getArtifacts();
 
-                    for (ArtifactResult artifactResult : artifactsResult.getArtifacts(type)) {
-                        if (artifactResult instanceof ResolvedArtifactResult) {
-                            resolvedArtifactResults.add((ResolvedArtifactResult) artifactResult);
-                        }
+                    Map<ComponentArtifactIdentifier, Set<ResolvedArtifactResult>> resolvedArtifactResults = artifacts.getArtifacts().stream().collect(Collectors.groupingBy(ArtifactResult::getId, Collectors.toSet()));
+                    for (Map.Entry<ComponentArtifactIdentifier, Set<ResolvedArtifactResult>> resolvedArtifactResult : resolvedArtifactResults.entrySet()) {
+                        auxiliaryArtifacts.put((ModuleComponentIdentifier) resolvedArtifactResult.getKey().getComponentIdentifier(), type, resolvedArtifactResult.getValue());
                     }
-                    auxiliaryArtifacts.put((ModuleComponentIdentifier) artifactsResult.getId(), type, resolvedArtifactResults);
                 }
             }
         }
@@ -206,6 +223,16 @@ public class IdeDependencySet {
                 ComponentIdentifier componentIdentifier = identifier.getComponentIdentifier();
                 if (componentIdentifier instanceof ModuleComponentIdentifier) {
                     componentIdentifiers.add((ModuleComponentIdentifier) componentIdentifier);
+                }
+            }
+            return componentIdentifiers;
+        }
+
+        private Set<ComponentArtifactIdentifier> getModuleComponentArtifactIdentifiers() {
+            Set<ComponentArtifactIdentifier> componentIdentifiers = new LinkedHashSet<>();
+            for (ComponentArtifactIdentifier identifier : resolvedArtifacts.keySet()) {
+                if (identifier.getComponentIdentifier() instanceof ModuleComponentIdentifier) {
+                    componentIdentifiers.add(identifier);
                 }
             }
             return componentIdentifiers;

@@ -17,6 +17,7 @@
 package org.gradle.plugins.ide.eclipse.model.internal;
 
 import com.google.common.collect.ImmutableList;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.plugins.ide.eclipse.model.AbstractClasspathEntry;
 import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
 import org.gradle.plugins.ide.eclipse.model.Container;
@@ -33,10 +34,12 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 
 public class ClasspathFactory {
 
+    private final ObjectFactory objectFactory;
     private final EclipseClasspath classpath;
     private final EclipseDependenciesCreator dependenciesCreator;
 
-    public ClasspathFactory(EclipseClasspath classpath, IdeArtifactRegistry ideArtifactRegistry, GradleApiSourcesResolver gradleApiSourcesResolver, boolean inferModulePath) {
+    public ClasspathFactory(ObjectFactory objectFactory, EclipseClasspath classpath, IdeArtifactRegistry ideArtifactRegistry, GradleApiSourcesResolver gradleApiSourcesResolver, boolean inferModulePath) {
+        this.objectFactory = objectFactory;
         this.classpath = classpath;
         this.dependenciesCreator = new EclipseDependenciesCreator(classpath, ideArtifactRegistry, gradleApiSourcesResolver, inferModulePath);
     }
