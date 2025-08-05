@@ -34,12 +34,10 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 
 public class ClasspathFactory {
 
-    private final ObjectFactory objectFactory;
     private final EclipseClasspath classpath;
     private final EclipseDependenciesCreator dependenciesCreator;
 
-    public ClasspathFactory(ObjectFactory objectFactory, EclipseClasspath classpath, IdeArtifactRegistry ideArtifactRegistry, GradleApiSourcesResolver gradleApiSourcesResolver, boolean inferModulePath) {
-        this.objectFactory = objectFactory;
+    public ClasspathFactory(EclipseClasspath classpath, IdeArtifactRegistry ideArtifactRegistry, GradleApiSourcesResolver gradleApiSourcesResolver, boolean inferModulePath) {
         this.classpath = classpath;
         this.dependenciesCreator = new EclipseDependenciesCreator(classpath, ideArtifactRegistry, gradleApiSourcesResolver, inferModulePath);
     }

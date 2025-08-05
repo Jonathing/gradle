@@ -37,6 +37,8 @@ import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.artifacts.result.UnresolvedDependencyResult;
 import org.gradle.api.attributes.DocsType;
 import org.gradle.api.component.Artifact;
+import org.gradle.api.logging.Logger;
+import org.gradle.api.logging.Logging;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.specs.Specs;
@@ -65,6 +67,8 @@ import static org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFacto
  * Allows adding and subtracting {@link Configuration}s, working in offline mode and downloading sources/javadoc.
  */
 public class IdeDependencySet {
+    private static final Logger LOGGER = Logging.getLogger(IdeDependencySet.class);
+
     private final ObjectFactory objectFactory;
     private final DependencyHandler dependencyHandler;
     private final JavaModuleDetector javaModuleDetector;
@@ -179,7 +183,7 @@ public class IdeDependencySet {
                 return;
             }
 
-            Set<ComponentArtifactIdentifier> componentIdentifiers = getModuleComponentArtifactIdentifiers();
+            Set<ComponentArtifactIdentifier> componentIdentifiers = getModuleComponentIdentifiers();
             if (componentIdentifiers.isEmpty()) {
                 return;
             }
@@ -211,24 +215,14 @@ public class IdeDependencySet {
 
                     Map<ComponentArtifactIdentifier, Set<ResolvedArtifactResult>> resolvedArtifactResults = artifacts.getArtifacts().stream().collect(Collectors.groupingBy(ArtifactResult::getId, Collectors.toSet()));
                     for (Map.Entry<ComponentArtifactIdentifier, Set<ResolvedArtifactResult>> resolvedArtifactResult : resolvedArtifactResults.entrySet()) {
+                        LOGGER.warn("Found artifacts for {} : {}", resolvedArtifactResult.getKey().getComponentIdentifier(), resolvedArtifactResult.getValue().stream().map(Object::toString).collect(Collectors.joining(", ")));
                         auxiliaryArtifacts.put((ModuleComponentIdentifier) resolvedArtifactResult.getKey().getComponentIdentifier(), type, resolvedArtifactResult.getValue());
                     }
                 }
             }
         }
 
-        private Set<ModuleComponentIdentifier> getModuleComponentIdentifiers() {
-            Set<ModuleComponentIdentifier> componentIdentifiers = new LinkedHashSet<>();
-            for (ComponentArtifactIdentifier identifier : resolvedArtifacts.keySet()) {
-                ComponentIdentifier componentIdentifier = identifier.getComponentIdentifier();
-                if (componentIdentifier instanceof ModuleComponentIdentifier) {
-                    componentIdentifiers.add((ModuleComponentIdentifier) componentIdentifier);
-                }
-            }
-            return componentIdentifiers;
-        }
-
-        private Set<ComponentArtifactIdentifier> getModuleComponentArtifactIdentifiers() {
+        private Set<ComponentArtifactIdentifier> getModuleComponentIdentifiers() {
             Set<ComponentArtifactIdentifier> componentIdentifiers = new LinkedHashSet<>();
             for (ComponentArtifactIdentifier identifier : resolvedArtifacts.keySet()) {
                 if (identifier.getComponentIdentifier() instanceof ModuleComponentIdentifier) {
